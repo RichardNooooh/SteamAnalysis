@@ -38,28 +38,38 @@ class APIScraper:
             raise ValueError("Steam API key not found")
 
     def get_request(
-        self, url: str, max_attempts: int, params: dict = None, headers: dict = None
+        self,
+        url: str,
+        max_attempts: int,
+        params: dict = None,
+        headers: dict = None,
+        exit_on_fail: bool = True,
     ) -> Response:
         attempt_count = 0
         while attempt_count < max_attempts:
+            attempt_count += 1
             try:
                 response = requests.get(url, params=params, headers=headers)
                 response.raise_for_status()
                 return response
             except HTTPError as e:
-                if e in self.RETRY_CODES:
-                    self.log.warning(f"Received HTTPError: {e}")
+                if e in self.RETRY_CODES and attempt_count < max_attempts:
+                    self.log.warning("Received server-side HTTPError. Retrying...")
                 else:
-                    self.log.exception(f"Fatal HTTPError: {e}")
-                    exit(1)
+                    self.log.warning("Received HTTPError. Stopping request...")
+                    break
             time.sleep(self.RETRY_TIME)
-        self.log.error(
-            f"Failed to retrieve successful response from {url} "
-            + f"within {max_attempts} attempts"
-        )
-        self.log.error(f"    params={params}")
-        self.log.error(f"    headers={headers}")
-        exit(1)
+
+        if exit_on_fail:
+            self.log.error(
+                f"Failed to retrieve successful response from {url} "
+                + f"within {max_attempts} attempts"
+            )
+            self.log.error(f"    params={params}")
+            self.log.error(f"    headers={headers}")
+            exit(1)
+
+        return None
 
     def post_request(
         self,
@@ -68,27 +78,34 @@ class APIScraper:
         body: dict,
         params: dict = None,
         headers: dict = None,
+        exit_on_fail: bool = False,
     ) -> Response:
         attempt_count = 0
         while attempt_count < max_attempts:
+            attempt_count += 1
             try:
                 response = requests.get(url, json=body, params=params, headers=headers)
                 response.raise_for_status()
                 return response
             except HTTPError as e:
-                if e in self.RETRY_CODES:
-                    self.log.warning(f"Received HTTPError: {e}")
+                if e in self.RETRY_CODES and attempt_count < max_attempts:
+                    self.log.warning("Received server-side HTTPError. Retrying...")
                 else:
-                    self.log.exception(f"Fatal HTTPError: {e}")
-                    exit(1)
+                    self.log.warning("Received HTTPError. Stopping request...")
+                    break
             time.sleep(self.RETRY_TIME)
-        self.log.error(
-            f"Failed to retrieve successful response from {url} "
-            + f"within {max_attempts} attempts"
-        )
-        self.log.error(f"    params={params}")
-        self.log.error(f"    headers={headers}")
-        exit(1)
+            time.sleep(self.RETRY_TIME)
+
+        if exit_on_fail:
+            self.log.error(
+                f"Failed to retrieve successful response from {url} "
+                + f"within {max_attempts} attempts"
+            )
+            self.log.error(f"    params={params}")
+            self.log.error(f"    headers={headers}")
+            exit(1)
+
+        return None
 
     def run_scraper(self):
         raise NotImplementedError()
