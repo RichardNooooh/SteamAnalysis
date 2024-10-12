@@ -23,7 +23,7 @@ class APIScraper:
         ]
         
         self.RETRY_TIME = 5.0    # seconds
-        self.REQUEST_INTERVAL_TIME = 2.0 # seconds
+        self.REQUEST_INTERVAL_TIME = 0.5 # seconds
 
     def run_scraper(self):
         raise NotImplementedError()

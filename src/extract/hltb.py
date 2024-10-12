@@ -164,7 +164,7 @@ class HLTBScraper(APIScraper):
                     self.log.warning(
                         f"    Requested page number {page} does not match response page number {results["pageCurrent"]}"
                     )
-                
+
                 is_final_page = results["pageCurrent"] == results["pageTotal"]
 
                 ids = []
@@ -190,10 +190,20 @@ class HLTBScraper(APIScraper):
     def get_hltb_ids(
         self,
         search_key: str,
+        max_pages: int = 500,
         max_attempts_per_page: int = 3,
         reset_id_file: bool = True,
     ) -> None:
-        """ """
+        """
+        Extracts all HLTB ids and records data into `self.id_file`.
+
+        Args:
+            search_key (str): search key obtained from `self.get_search_key()`
+            max_pages (int): last page number to read
+            max_attempts_per_page (int): maximum number of request retries
+            reset_id_file (bool): if True (default), erases data in
+                                  `self.id_file` before recording new data
+        """
         # empty out the output id file
         if reset_id_file:
             self.log.warning(f"Emptying or creating {self.id_file}")
@@ -205,14 +215,14 @@ class HLTBScraper(APIScraper):
 
         # iterate through all pages on HLTB
         page = 1
-        while True:
+        while page <= max_pages:
             self.log.info(f"Requesting search page {page}")
             game_ids_from_page, is_final_page = self.get_hltb_ids_page(
                 page, search_url, search_body, max_attempts_per_page
             )
 
             self.__record_search_page__(game_ids_from_page)
-            
+
             if is_final_page:
                 break
 
@@ -221,11 +231,73 @@ class HLTBScraper(APIScraper):
 
         return
 
+    def get_game_data(self, url_id: str, max_attempts: int = 3) -> dict:
+        """
+        Fetches JSON completion data and (if available) STEAM id for game with given HLTB id.
+
+        Args:
+            url_id (str): HLTB url in `/game/` route with HLTB id
+            max_attempts (int): maximum number of request attempts
+        """
+        self.log.info(f"    Requesting data from {url_id}")
+
+        attempt_count = 0
+        while attempt_count < max_attempts:
+            try:
+                response = requests.get(url_id, headers=self.HEADERS)
+                response.raise_for_status()
+
+                soup = BeautifulSoup(response.text, 'html.parser')
+
+                # gather JSON game data
+                json_script_tag = soup.find('script', id="__NEXT_DATA__")
+                if not json_script_tag:
+                    self.log.error(
+                        "    Fatal error in finding <script> with `__NEXT_DATA__` id"
+                    )
+                    exit(1)
+                
+                json_data = json.loads(json_script_tag.string)
+                return json_data
+
+            except HTTPError as e:
+                if e in self.RETRY_CODES:
+                    self.log.warning(f"    HTTPError in requesting game from {url_id}: {e}")
+                else:
+                    self.log.exception(f"    Fatal error in requesting game from {url_id}: {e}")
+                    exit(1)
+            time.sleep(self.RETRY_TIME)
+
+        self.log.error(f"Failed to retrieve game data from {url_id} in {max_attempts} attempts")
+        exit(1)
+
+    def get_all_game_data(self) -> None:
+        """
+        Using the ids recorded in `self.id_file`, record all JSON completion data in
+        `self.data_file`.
+        """
+        self.log.info(
+            f"Reading IDs from {self.id_file} and recording app JSON data into {self.data_file}"
+        )
+
+        game_url = self.BASE_URL + "/game/"
+        id_file = open(self.id_file, mode="r")
+        data_file = open(self.data_file, mode="w")
+
+        for hltb_id in id_file:
+            game_data = self.get_game_data(game_url + hltb_id.strip())
+            json_txt = json.dumps(game_data) + "\n"
+
+            data_file.write(json_txt)
+
+        id_file.close()
+        data_file.close()
+
 
 if __name__ == "__main__":
     fmt = logging.Formatter("%(asctime)s | %(name)s | %(levelname)s | %(message)s")
 
-    file_handler = logging.FileHandler("../../logs/scraper.log", mode="w")
+    file_handler = logging.FileHandler("../../logs/extract_hltk.log", mode="w")
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(fmt)
 
@@ -241,3 +313,4 @@ if __name__ == "__main__":
     hltb_scraper = HLTBScraper()
     key = hltb_scraper.get_search_key()
     hltb_scraper.get_hltb_ids(key)
+    hltb_scraper.get_all_game_data()
