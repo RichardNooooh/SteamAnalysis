@@ -34,55 +34,36 @@ class HLTBScraper(APIScraper):
         Returns:
             str: hexadecimal search key
         """
+        # Search for _app script URL
         self.log.info("Scraping search key...")
+        response = self.get_request(self.BASE_URL, max_attempts, headers=self.headers)
 
-        attempt_count = 0
-        while attempt_count < max_attempts:
-            attempt_count += 1
-            try:
-                # Look for <script> with search key
-                response = requests.get(self.BASE_URL, headers=self.HEADERS)
-                response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+        script_key_tag = soup.find(
+            "script", src=re.compile(r"_next/static/chunks/pages/_app-.*\.js")
+        )
+        if not script_key_tag:
+            self.log.error(
+                "    Fatal error in finding <script> tag with src from _next/static/chunks/pages/_app-*.js"
+            )
+            exit(1)
 
-                soup = BeautifulSoup(response.text, "html.parser")
-                script_key_tag = soup.find(
-                    "script", src=re.compile(r"_next/static/chunks/pages/_app-.*\.js")
-                )
-                if not script_key_tag:
-                    self.log.error(
-                        "    Fatal error in finding <script> tag with src from _next/static/chunks/pages/_app-*.js"
-                    )
-                    exit(1)
+        # Obtain script JS data
+        script_url = self.BASE_URL + script_key_tag["src"]
+        response = self.get_request(script_url, max_attempts, headers=self.headers)
 
-                # Obtain script JS data
-                script_url = self.BASE_URL + script_key_tag["src"]
-                response = requests.get(script_url, headers=self.HEADERS)
-                response.raise_for_status()
+        # regex search for: "/api/search/".concat("{KEY}")
+        matched_regex = re.search(
+            r'"\/api\/search\/"\.concat\("([a-zA-Z0-9]+)"\)', response.text
+        )
 
-                # regex search for: "/api/search/".concat("{KEY}")
-                matched_regex = re.search(
-                    r'"\/api\/search\/"\.concat\("([a-zA-Z0-9]+)"\)', response.text
-                )
-
-                if matched_regex:
-                    search_key = matched_regex.group(1)
-                    self.log.info(f"    Found search key: {search_key}")
-                    return search_key
-                else:
-                    self.log.error("    Regex failed to find search key")
-                    exit(1)
-
-            except HTTPError as e:
-                if e in self.RETRY_CODES:
-                    self.log.warning(f"    HTTPError in finding search UUID: {e}")
-                else:
-                    self.log.exception(f"    Fatal error in finding search UUID: {e}")
-                    exit(1)
-
-            time.sleep(self.RETRY_TIME)
-
-        self.log.error(f"Failed to find search key in {max_attempts} attempts")
-        exit(1)
+        if matched_regex:
+            search_key = matched_regex.group(1)
+            self.log.info(f"    Found search key: {search_key}")
+            return search_key
+        else:
+            self.log.error("    Regex failed to find search key")
+            exit(1)
 
     def __get_searchbody__(self) -> dict:
         """
@@ -150,42 +131,24 @@ class HLTBScraper(APIScraper):
             list: list of HLTB ids (each `int`)
             bool: whether or not this is the last page
         """
-        attempt_count = 0
-        while attempt_count < max_attempts_per_page:
-            try:
-                search_body["searchPage"] = page
-                response = requests.post(
-                    search_url, json=search_body, headers=self.HEADERS
-                )
-                response.raise_for_status()
-
-                results = response.json()
-                if results["pageCurrent"] != page:
-                    self.log.warning(
-                        f"    Requested page number {page} does not match response page number {results["pageCurrent"]}"
-                    )
-
-                is_final_page = results["pageCurrent"] == results["pageTotal"]
-
-                ids = []
-                for game in results["data"]:
-                    ids.append(game["game_id"])
-
-                self.log.debug(f"    Found {len(ids)} results on page {page}")
-                return ids, is_final_page
-
-            except HTTPError as e:
-                if e in self.RETRY_CODES:
-                    self.log.warning(f"    HTTPError with page {page}: {e}")
-                else:
-                    self.log.exception(f"    Fatal error in searching page {page}: {e}")
-                    exit(1)
-            time.sleep(self.RETRY_TIME)
-
-        self.log.error(
-            f"Failed to find data from page {page} in {max_attempts_per_page} attempts"
+        search_body["searchPage"] = page
+        response = self.post_request(
+            search_url, max_attempts_per_page, body=search_body, headers=self.headers
         )
-        exit(1)
+        results = response.json()
+        if results["pageCurrent"] != page:
+            self.log.warning(
+                f"    Requested page number {page} does not match response page number {results["pageCurrent"]}"
+            )
+
+        is_final_page = results["pageCurrent"] == results["pageTotal"]
+
+        ids = []
+        for game in results["data"]:
+            ids.append(game["game_id"])
+
+        self.log.debug(f"    Found {len(ids)} results on page {page}")
+        return ids, is_final_page
 
     def get_hltb_ids(
         self,
@@ -216,7 +179,7 @@ class HLTBScraper(APIScraper):
         # iterate through all pages on HLTB
         page = 1
         while page <= max_pages:
-            self.log.info(f"Requesting search page {page}")
+            self.log.debug(f"Requesting search page {page}")
             game_ids_from_page, is_final_page = self.get_hltb_ids_page(
                 page, search_url, search_body, max_attempts_per_page
             )
@@ -224,52 +187,42 @@ class HLTBScraper(APIScraper):
             self.__record_search_page__(game_ids_from_page)
 
             if is_final_page:
+                self.log.info("    Reached final page")
                 break
+
+            if page % 10 == 0:
+                self.log.info(f"    Requested up to page {page}...")
 
             time.sleep(self.REQUEST_INTERVAL_TIME)
             page += 1
 
+        self.log.info(f"Successfully processed {page-1} pages")
         return
 
-    def get_game_data(self, url_id: str, max_attempts: int = 3) -> dict:
+    def get_game_data(self, url: str, hltb_id: str, max_attempts: int = 3) -> dict:
         """
         Fetches JSON completion data and (if available) STEAM id for game with given HLTB id.
 
         Args:
-            url_id (str): HLTB url in `/game/` route with HLTB id
+            url (str): HLTB url in `/game/` route
+            hltb_id (str): HLTB id
             max_attempts (int): maximum number of request attempts
         """
-        self.log.info(f"    Requesting data from {url_id}")
+        url_id = url + hltb_id
+        self.log.debug(f"    Requesting data from {url_id}")
+        response = self.get_request(url_id, max_attempts, headers=self.headers)
+        soup = BeautifulSoup(response.text, "html.parser")
 
-        attempt_count = 0
-        while attempt_count < max_attempts:
-            try:
-                response = requests.get(url_id, headers=self.HEADERS)
-                response.raise_for_status()
+        # gather JSON game data
+        json_script_tag = soup.find("script", id="__NEXT_DATA__")
+        if not json_script_tag:
+            self.log.error(
+                "    Fatal error in finding <script> with `__NEXT_DATA__` id"
+            )
+            exit(1)
 
-                soup = BeautifulSoup(response.text, 'html.parser')
-
-                # gather JSON game data
-                json_script_tag = soup.find('script', id="__NEXT_DATA__")
-                if not json_script_tag:
-                    self.log.error(
-                        "    Fatal error in finding <script> with `__NEXT_DATA__` id"
-                    )
-                    exit(1)
-                
-                json_data = json.loads(json_script_tag.string)
-                return json_data
-
-            except HTTPError as e:
-                if e in self.RETRY_CODES:
-                    self.log.warning(f"    HTTPError in requesting game from {url_id}: {e}")
-                else:
-                    self.log.exception(f"    Fatal error in requesting game from {url_id}: {e}")
-                    exit(1)
-            time.sleep(self.RETRY_TIME)
-
-        self.log.error(f"Failed to retrieve game data from {url_id} in {max_attempts} attempts")
-        exit(1)
+        json_data = json.loads(json_script_tag.string)
+        return json_data
 
     def get_all_game_data(self) -> None:
         """
@@ -285,7 +238,7 @@ class HLTBScraper(APIScraper):
         data_file = open(self.data_file, mode="w")
 
         for hltb_id in id_file:
-            game_data = self.get_game_data(game_url + hltb_id.strip())
+            game_data = self.get_game_data(game_url, hltb_id.strip())
             json_txt = json.dumps(game_data) + "\n"
 
             data_file.write(json_txt)
@@ -295,7 +248,7 @@ class HLTBScraper(APIScraper):
 
 
 if __name__ == "__main__":
-    fmt = logging.Formatter("%(asctime)s | %(name)s | %(levelname)s | %(message)s")
+    fmt = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
 
     file_handler = logging.FileHandler("../../logs/extract_hltk.log", mode="w")
     file_handler.setLevel(logging.INFO)

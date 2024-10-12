@@ -5,6 +5,7 @@ import requests
 from requests.exceptions import HTTPError
 from requests import Response
 import os
+import time
 
 
 class APIScraper:
@@ -37,11 +38,7 @@ class APIScraper:
             raise ValueError("Steam API key not found")
 
     def get_request(
-        self, 
-        url: str, 
-        max_attempts: int, 
-        params: dict = None, 
-        headers: dict = None
+        self, url: str, max_attempts: int, params: dict = None, headers: dict = None
     ) -> Response:
         attempt_count = 0
         while attempt_count < max_attempts:
@@ -55,6 +52,14 @@ class APIScraper:
                 else:
                     self.log.exception(f"Fatal HTTPError: {e}")
                     exit(1)
+            time.sleep(self.RETRY_TIME)
+        self.log.error(
+            f"Failed to retrieve successful response from {url} "
+            + f"within {max_attempts} attempts"
+        )
+        self.log.error(f"    params={params}")
+        self.log.error(f"    headers={headers}")
+        exit(1)
 
     def post_request(
         self,
@@ -76,6 +81,14 @@ class APIScraper:
                 else:
                     self.log.exception(f"Fatal HTTPError: {e}")
                     exit(1)
+            time.sleep(self.RETRY_TIME)
+        self.log.error(
+            f"Failed to retrieve successful response from {url} "
+            + f"within {max_attempts} attempts"
+        )
+        self.log.error(f"    params={params}")
+        self.log.error(f"    headers={headers}")
+        exit(1)
 
     def run_scraper(self):
         raise NotImplementedError()
