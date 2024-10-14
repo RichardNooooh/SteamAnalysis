@@ -44,7 +44,7 @@ class APIScraper:
         params: dict = None,
         headers: dict = None,
         exit_on_fail: bool = True,
-    ) -> Response:
+    ) -> Response | None:
         attempt_count = 0
         while attempt_count < max_attempts:
             attempt_count += 1
@@ -79,7 +79,7 @@ class APIScraper:
         params: dict = None,
         headers: dict = None,
         exit_on_fail: bool = False,
-    ) -> Response:
+    ) -> Response | None:
         attempt_count = 0
         while attempt_count < max_attempts:
             attempt_count += 1

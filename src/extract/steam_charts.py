@@ -10,6 +10,10 @@ class SteamPlayerCharts(APIScraper):
         self.data_file = "../../data/raw/steam_charts/ccu_history.jsonl"
         self.id_file = "../../data/raw/steam_ids/game_ids.txt"
         self.end_path = "/chart-data.json"
+        self.REQUEST_INTERVAL_TIME = 0.75  # seconds
+
+        self.charted_id_file = "../../data/raw/steam_charts/game_ids_charted.txt"
+        self.uncharted_id_file = "../../data/raw/steam_charts/game_ids_uncharted.txt"
 
     def get_ccu_history_id(self, id: int) -> list | None:
         """
@@ -24,40 +28,61 @@ class SteamPlayerCharts(APIScraper):
         response = self.get_request(url, 1, headers=self.headers, exit_on_fail=False)
         return response.json() if response else None
 
-    def get_all_ccu_history(self) -> None:
+    def get_all_ccu_history(self, start: int = 0, limit: int = 25000) -> None:
         """
         Records all historical data in `self.data_file` for each `id` in `self.id_file`
         """
-        self.log.info("Beginning retrieval of concurrent player count histories")
-        steam_id_file = open(self.id_file, mode="r")
-        output_data = open(self.data_file, mode="w")
-        i = 1
-        for app in steam_id_file:
-            if i % 100 == 0:
-                self.log.info(f"Found data for {i} games")
-            id_data = app.split("\t")
-            if len(id_data) == 1:
-                continue
+        self.log.info(f"Reading from {self.id_file}")
+        app_ids = []
+        with open(self.id_file, mode="r") as f:
+            for app in f:
+                data = app.split("\t")
+                if len(data) == 1:
+                    continue
+                app_ids.append((int(data[0]), data[1].strip()))
+        app_ids = app_ids[start : start + limit]
 
-            app_id = int(id_data[0])
-            ccu_data = self.get_ccu_history_id(app_id)
-            if not ccu_data or len(ccu_data) == 0:
-                self.log.warning(
-                    f"Failed to find CCU history for id={app_id}, {id_data[1].strip()}"
-                )
-                continue
+        # if start is 0, then begin writing from the beginning
+        file_mode = "w" if start == 0 else "a"
 
-            output_data.write(f"{app_id}\t{ccu_data}")
-            time.sleep(self.REQUEST_INTERVAL_TIME)
+        self.log.info(
+            "Beginning retrieval of concurrent player count "\
+            + f"histories for {len(app_ids)} games, from index {start} "\
+            + f"to {start+limit-1} (inclusive)"
+        )
 
-        steam_id_file.close()
+        with open(self.data_file, mode=file_mode) as output_data, \
+             open(self.charted_id_file, mode=file_mode) as charted_file, \
+             open(self.uncharted_id_file, mode=file_mode) as uncharted_file:
+            
+            i, count = 0, 0
+            for app_id, name in app_ids:
+                i += 1
+                if i % 100 == 0:
+                    self.log.info(f"Retrieved status / data for {i} games")
+
+                ccu_data = self.get_ccu_history_id(app_id)
+                if not ccu_data or len(ccu_data) == 0:
+                    self.log.warning(
+                        f"Failed to find CCU history for id={app_id}, {name}"
+                    )
+                    uncharted_file.write(f"{app_id}: {name}\n")
+                    continue
+                count += 1
+                output_data.write(f"{app_id}\t{ccu_data}\n")
+                charted_file.write(f"{app_id}: {name}\n")
+                time.sleep(self.REQUEST_INTERVAL_TIME)
+
+        self.log.info(f"Finished recording the CCU history for {count} games.")
 
 
 if __name__ == "__main__":
+    START = 0
+    LIMIT = 10000
     fmt = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
 
     file_handler = logging.FileHandler(
-        "../../logs/extract_steamcharts_ccu.log", mode="w"
+        "../../logs/extract_steamcharts_ccu.log", mode="w" if START == 0 else "a"
     )
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(fmt)
@@ -72,4 +97,4 @@ if __name__ == "__main__":
     logger.addHandler(console_handler)
 
     steamcharts_scraper = SteamPlayerCharts()
-    steamcharts_scraper.get_all_ccu_history()
+    steamcharts_scraper.get_all_ccu_history(start=START, limit=LIMIT)
