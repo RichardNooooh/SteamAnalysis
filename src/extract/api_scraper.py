@@ -6,7 +6,7 @@ from requests.exceptions import HTTPError
 from requests import Response
 import os
 import time
-
+import logging
 
 class APIScraper:
     def __init__(self, url):
@@ -28,6 +28,8 @@ class APIScraper:
             HTTPStatus.GATEWAY_TIMEOUT,
             HTTPStatus.SERVICE_UNAVAILABLE,
         ]
+
+        self.log = logging.getLogger(__name__)
 
         self.RETRY_TIME = 5.0  # seconds
         self.REQUEST_INTERVAL_TIME = 0.5  # seconds
@@ -56,8 +58,9 @@ class APIScraper:
                 if e in self.RETRY_CODES and attempt_count < max_attempts:
                     self.log.warning("Received server-side HTTPError. Retrying...")
                 else:
-                    self.log.warning("Received HTTPError. Stopping request...")
-                    break
+                    self.log.exception(f"Received HTTPError: {e}")
+            except Exception as e:
+                self.log.exception(f"Received nonHTTPError: {e}")
             time.sleep(self.RETRY_TIME)
 
         if exit_on_fail:
@@ -91,9 +94,9 @@ class APIScraper:
                 if e in self.RETRY_CODES and attempt_count < max_attempts:
                     self.log.warning("Received server-side HTTPError. Retrying...")
                 else:
-                    self.log.warning("Received HTTPError. Stopping request...")
-                    break
-            time.sleep(self.RETRY_TIME)
+                    self.log.exception(f"Received HTTPError: {e}")
+            except Exception as e:
+                self.log.exception(f"Received nonHTTPError: {e}")
             time.sleep(self.RETRY_TIME)
 
         if exit_on_fail:
