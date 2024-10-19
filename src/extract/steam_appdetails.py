@@ -41,6 +41,8 @@ class SteamAppDetailsScraper(APIScraper):
     
     def get_appdetails(self, start=0, limit=10000) -> None:
         """
+        Iterates through the filtered apps list and slowly retrieves appdetail data
+        for each app.
         """
         self.log.info(f"Reading app IDs from {self.id_folder}{self.id_files}")
         app_ids_names = []
@@ -81,8 +83,8 @@ class SteamAppDetailsScraper(APIScraper):
 
 
 if __name__ == "__main__":
-    START = 10000
-    LIMIT = 10000
+    START = 80000
+    LIMIT = 20000
     fmt = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
 
     file_handler = logging.FileHandler(
