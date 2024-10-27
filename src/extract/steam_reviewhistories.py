@@ -4,21 +4,16 @@ from api_scraper import APIScraper
 import json
 import os
 
-class GamalyticScraper(APIScraper):
+class SteamReviewHistoriesScraper(APIScraper):
     def __init__(self):
-        super().__init__("https://api.gamalytic.com/game/")
+        super().__init__("https://store.steampowered.com/appreviewhistogram/")
         self.id_file = "../../data/raw/steam_ids/game_ids.txt"
-        self.data_file = "../../data/raw/gamalytic/data"
+        self.data_file = "../../data/raw/steam_apps/review_history"
         self.REQUEST_INTERVAL_TIME = 0.5
 
-        self.GAMALYTIC_API_KEY = os.getenv("GAMALYTIC_API_KEY")
-        self.log = logging.getLogger(__name__)
-
         self.params = {
-            "include_pre_release_history": "true",
-        }
-        self.headers = {
-            "api-key": self.GAMALYTIC_API_KEY
+            "l": "english",
+            "review_score_preference": 0
         }
 
 
@@ -54,7 +49,7 @@ class GamalyticScraper(APIScraper):
                     self.log.info(f"Processed {i} apps")
                 
                 url = f"{self.BASE_URL}{app_id}"
-                response = self.get_request(url, max_attempts=3, params=self.params, headers=self.headers, exit_on_fail=False)
+                response = self.get_request(url, max_attempts=3, params=self.params, exit_on_fail=False)
                 if not response:
                     self.log.warning(f"No data returned for app_id: {app_id}")
                     continue
@@ -70,12 +65,12 @@ class GamalyticScraper(APIScraper):
 
 
 if __name__ == "__main__":
-    START = 20000
-    LIMIT = 30000
+    START = 0
+    LIMIT = 20000
     fmt = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
 
     file_handler = logging.FileHandler(
-        "../../logs/extract_gamalytic.log", mode="w" if START == 0 else "a"
+        "../../logs/extract_steamreviewhistories.log", mode="w" if START == 0 else "a"
     )
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(fmt)
@@ -89,5 +84,5 @@ if __name__ == "__main__":
     logger.addHandler(file_handler)
     logger.addHandler(console_handler)
 
-    steam_scraper = GamalyticScraper()
+    steam_scraper = SteamReviewHistoriesScraper()
     steam_scraper.get_data(start=START, limit=LIMIT)
