@@ -2,7 +2,7 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, T
 from sqlalchemy.orm import declarative_base, relationship
 import os
 
-Base = declarative_base()
+
 
 class GamalyticsMain(Base):
     __tablename__ = 'gamalytics_main'
@@ -49,7 +49,7 @@ class GamalyticsAudienceOverlap(Base):
     __tablename__ = 'gamalytics_audience_overlap'
     overlapId = Column(Integer, primary_key=True, autoincrement=True)
     steamId = Column(Integer, ForeignKey('gamalytics_main.steamId'))
-    type = Column(Text)  # "audience_overlap" or "also_played"
+    dataType = Column(Text)  # "audience_overlap" or "also_played"
     relatedSteamId = Column(Integer)
     link = Column(Float)
     relatedName = Column(Text)
@@ -91,12 +91,7 @@ class GamalyticsAttributes(Base):
     __tablename__ = 'gamalytics_attributes'
     attributeId = Column(Integer, primary_key=True, autoincrement=True)
     steamId = Column(Integer, ForeignKey('gamalytics_main.steamId'))
-    type = Column(Text)  # "tag", "genre", "feature", or "language"
+    attributeType = Column(Text)  # "tag", "genre", "feature", or "language"
     value = Column(Text)
 
-db_path = './data/transformed/stage_1.db'
-os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
-engine = create_engine(f'sqlite:///{db_path}')
-
-Base.metadata.create_all(engine)

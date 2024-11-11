@@ -1,4 +1,4 @@
-from loaders.gamalytics_loader import GamalyticsDataLoader
+from loaders.gamalytics import GamalyticsDataLoader
 
 if __name__ == "__main__":
     db_path = './data/transformed/stage_1.db'
