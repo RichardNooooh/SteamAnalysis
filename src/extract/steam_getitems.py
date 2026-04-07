@@ -103,8 +103,8 @@ class SteamGetItemsScraper(APIScraper):
 
 
 if __name__ == "__main__":
-    START = 20000
-    LIMIT = 20000
+    START = 100000
+    LIMIT = 80000
     BATCH_SIZE = 50
     fmt = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
 

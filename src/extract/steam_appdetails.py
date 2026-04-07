@@ -83,8 +83,8 @@ class SteamAppDetailsScraper(APIScraper):
 
 
 if __name__ == "__main__":
-    START = 80000
-    LIMIT = 20000
+    START = 130000
+    LIMIT = 40000
     fmt = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
 
     file_handler = logging.FileHandler(

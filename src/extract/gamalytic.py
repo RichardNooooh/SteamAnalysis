@@ -70,7 +70,7 @@ class GamalyticScraper(APIScraper):
 
 
 if __name__ == "__main__":
-    START = 20000
+    START = 110000
     LIMIT = 30000
     fmt = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
 

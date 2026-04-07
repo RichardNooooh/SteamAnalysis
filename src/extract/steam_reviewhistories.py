@@ -65,8 +65,8 @@ class SteamReviewHistoriesScraper(APIScraper):
 
 
 if __name__ == "__main__":
-    START = 0
-    LIMIT = 20000
+    START = 110000
+    LIMIT = 60000
     fmt = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
 
     file_handler = logging.FileHandler(
